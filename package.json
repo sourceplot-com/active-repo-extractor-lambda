@@ -7,10 +7,9 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "prebuild": "npm run clean",
     "clean": "rm -rf dist",
     "zip": "zip -r function.zip dist/ node_modules/",
-    "package": "npm run build && npm run zip",
+    "package": "NODE_ENV=production npm run clean && npm ci && npm run build && npm ci --omit=dev --ignore-scripts && npm run zip",
     "prepare": "husky"
   },
   "dependencies": {
