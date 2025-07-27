@@ -1,20 +1,11 @@
 import { SQSClient, SendMessageBatchCommand } from "@aws-sdk/client-sqs";
 import { env } from "~/env/env.js";
+import { ActiveRepositoryData } from "../extractor/active-repo-extractor.js";
 import { chunk } from "~/utils/batch.js";
-import { getTargetDatetime } from "~/utils/time.js";
+import { ActiveRepositoryPublisher, ActiveRepositoriesPayload } from "./active-repo-publisher.js";
 
-export interface ActiveRepositoryData {
-	name: string;
-}
-
-export interface ActiveRepositoriesPayload {
-	timestamp: string;
-	repositories: ActiveRepositoryData[];
-}
-
-export class ActiveRepositoriesPublisher {
+export class ActiveRepoSqsPublisher implements ActiveRepositoryPublisher {
 	private static readonly MAX_SQS_BATCH_SIZE = 10;
-	private static readonly MAX_REPOSITORIES_PER_PAYLOAD = 500;
 
 	private readonly sqsClient: SQSClient;
 
@@ -23,14 +14,14 @@ export class ActiveRepositoriesPublisher {
 	}
 
 	async submit(activeRepositories: ActiveRepositoryData[]) {
-		const payloads: ActiveRepositoriesPayload[] = chunk(activeRepositories, ActiveRepositoriesPublisher.MAX_REPOSITORIES_PER_PAYLOAD).map(
+		const payloads: ActiveRepositoriesPayload[] = chunk(activeRepositories, env.activeRepositoriesPerMessage).map(
 			(repositories) => ({
-				timestamp: getTargetDatetime(),
+				timestamp: new Date().toUTCString(),
 				repositories
 			})
 		);
 
-		const payloadBatches = chunk(payloads, ActiveRepositoriesPublisher.MAX_SQS_BATCH_SIZE);
+		const payloadBatches = chunk(payloads, ActiveRepoSqsPublisher.MAX_SQS_BATCH_SIZE);
 		console.log(`Sending ${payloadBatches.length} payload batches, containing ${activeRepositories.length} total repositories`);
 
 		await Promise.all(payloadBatches.map((batch) => this.sendPayloadBatch(batch)));

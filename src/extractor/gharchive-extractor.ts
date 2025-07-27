@@ -1,14 +1,18 @@
-import { ActiveRepositoryData } from "./active-repos-publisher.js";
 import type { Octokit } from "@octokit/rest";
 import axios from "axios";
 import readline from "node:readline";
 import { createGunzip } from "zlib";
 import { getTargetDatetime } from "~/utils/time.js";
+import { ActiveRepositoryData, ActiveRepositoryExtractor } from "./active-repo-extractor.js";
 
 export type GetEventsResponse = Awaited<ReturnType<typeof Octokit.prototype.request<"GET /events">>>["data"];
 export type GitHubEvent = GetEventsResponse[0];
 
-export class GhArchiveService {
+const ACTIVE_EVENT_TYPES = ["PushEvent", "CreateEvent"];
+
+export class GhArchiveActiveRepoExtractor implements ActiveRepositoryExtractor {
+	readonly name = "gharchive";
+
 	async getTodaysActiveRepositories(): Promise<ActiveRepositoryData[]> {
 		const gunzip = createGunzip();
 
@@ -18,12 +22,19 @@ export class GhArchiveService {
 			crlfDelay: Infinity
 		});
 
+		let totalEvents = 0;
+
 		const repositoryByName = new Map<string, ActiveRepositoryData>();
 		for await (const line of rl) {
 			const event: GitHubEvent = JSON.parse(line);
-			repositoryByName.set(event.repo.name, { name: event.repo.name });
+			if (event.type && ACTIVE_EVENT_TYPES.includes(event.type)) {
+				repositoryByName.set(event.repo.name, { name: event.repo.name });
+			}
+
+			totalEvents++;
 		}
 
+		console.log(`Found ${totalEvents} events, ${repositoryByName.size} of which are active repositories`);
 		return Array.from(repositoryByName.values());
 	}
 
